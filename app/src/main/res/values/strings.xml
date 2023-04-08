@@ -1,0 +1,22 @@
+<resources>
+    <string name="app_name">StressTest</string>
+
+    <string name="alternate_title">An alternate title that is long</string>
+    <string name="toggle_title">Toggle title</string>
+
+    <string name="menu_refresh">Refresh</string>
+    <string name="menu_search">Search</string>
+    <string name="menu_share">Share</string>
+    <string name="danger_alert_button">Send Danger Warning</string>
+    <string name="last_snmp_request">Last SNMP Request:</string>
+    <string name="last_snmp_request_get">Last GET:</string>
+    <string name="list_of_managers_label">Registered Managers</string>
+    <string name="list_of_messages_from_managers_label">Messages from Managers</string>
+
+    <string name="err_add_prof">Failed to add profile %s</string>
+    <string name="err_del_prof">Error deleting profile %s</string>
+    <string name="notify_title">SOCKS5 proxy activated</string>
+    <string name="notify_msg">Connected to %s</string>
+    <string name="channel_name">Proxy active</string>
+    <string name="prof_default">Default</string>
+</resources>
