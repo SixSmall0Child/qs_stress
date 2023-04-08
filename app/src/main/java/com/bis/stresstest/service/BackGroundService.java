@@ -95,7 +95,7 @@ public class BackGroundService extends Service {
             bgmediaPlayer.setLooping(true);
             bgmediaPlayer.start();
         }
-
+        startForeground(1, this.notification);
         return START_STICKY;
     }
 

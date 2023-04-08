@@ -1,16 +1,15 @@
 package com.bis.stresstest.receiver;
 
-import android.app.ActivityManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.CountDownTimer;
-import android.os.ShellCallback;
 import android.util.Log;
 
 import com.bis.stresstest.activity.AgentActivity;
 import com.bis.stresstest.app.MyApplication;
+import com.bis.stresstest.model.SOCModel;
 import com.bis.stresstest.util.Config;
 import com.bis.stresstest.util.FileUtils;
 import com.bis.stresstest.util.Logger;
@@ -22,9 +21,12 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 
 public class MyReceiver extends BroadcastReceiver {
+    private static final String TAG = "MyReceiver";
     NetworkThread networkThread;
     int type;
     int time;
@@ -46,13 +48,15 @@ public class MyReceiver extends BroadcastReceiver {
     int loopTime;
     int rebootCount = 0;
 
-    boolean isRK = false;
+    private SOCModel socModel;
+    private ExecutorService mExecutors = Executors.newCachedThreadPool();
 
     public MyReceiver() {
     }
 
     @Override
     public void onReceive(Context context, Intent intent) {
+        getCurSOCModel();
         Bundle bundle = intent.getExtras();
         switch (intent.getAction()) {
             case "android.intent.action.BOOT_COMPLETED":
@@ -76,7 +80,7 @@ public class MyReceiver extends BroadcastReceiver {
                 ShellUtils.execCommand("rm /data/data/com.bis.stresstest/rebootCount.txt", true);
                 ShellUtils.execCommand("input keyevent BACK", true);
                 ShellUtils.execCommand("am force-stop com.into.stability", true);
-                ShellUtils.execCommand("killall -9 stressapptest",true);
+                ShellUtils.execCommand("killall -9 stressapptest", true);
                 restartAPP();
                 break;
             //adb shell am broadcast -n com.bis.stresstest/.receiver.MyReceiver -a stresstest.intent.action.startGPUTest --esa message 1440
@@ -147,9 +151,9 @@ public class MyReceiver extends BroadcastReceiver {
     class NetworkThread extends Thread {
         @Override
         public void run() {
-            if (ShellUtils.execCommand("getprop | grep ro.soc.model",true).getSuccessMsg().contains("RK3588")){
-                ShellUtils.execCommand("settings put global settings_enable_monitor_phantom_procs false",true);
-                ShellUtils.execCommand("settings put global cached_apps_freezer disabled",true);
+            if (ShellUtils.execCommand("getprop | grep ro.soc.model", true).getSuccessMsg().contains("RK3588")) {
+                ShellUtils.execCommand("settings put global settings_enable_monitor_phantom_procs false", true);
+                ShellUtils.execCommand("settings put global cached_apps_freezer disabled", true);
             }
             ShellUtils.CommandResult isGB = ShellUtils.execCommand("ethtool eth0", true);
             ShellUtils.execCommand("killall iperf", true);
@@ -178,28 +182,46 @@ public class MyReceiver extends BroadcastReceiver {
     }
 
     public void startARMTest(String strings) {
-        new Thread(() -> {
-            try {
-                if (ShellUtils.execCommand("getprop | grep ro.soc.model",true).getSuccessMsg().contains("RK3588")){
-                    ShellUtils.execCommand("settings put global settings_enable_monitor_phantom_procs false",true);
-                    ShellUtils.execCommand("settings put global cached_apps_freezer disabled",true);
-                    isRK = true;
-                    ShellUtils.execCommand("/data/local/tmp/stressapptest -s 86400 -i 4 -C 4 -W -M 6144 >/dev/null 2>&1 &", true);
-                    Logger.i("RK3588开始CPU测试");
-                }else {
-                    Logger.i("Orion865开始CPU测试");
-                    isRK = false;
-                    ShellUtils.execCommand("input keyevent BACK", true);
-                    ShellUtils.execCommand("am force-stop com.into.stability", true);
-                    ShellUtils.execCommand("am start com.into.stability/com.common.activity.MainActivity", true);
-                    Thread.sleep(1000);
-                    //865不存在下方按钮栏
-                    ShellUtils.execCommand("input tap 477 459", true);
+        if (this.socModel == SOCModel.Orion865 || this.socModel == SOCModel.RK3588) {
+            new Thread(() -> {
+                try {
+                    if (ShellUtils.execCommand("getprop | grep ro.soc.model", true).getSuccessMsg().contains("RK3588")) {
+                        ShellUtils.execCommand("settings put global settings_enable_monitor_phantom_procs false", true);
+                        ShellUtils.execCommand("settings put global cached_apps_freezer disabled", true);
+                        ShellUtils.execCommand("/data/local/tmp/stressapptest -s 86400 -i 4 -C 4 -W -M 6144 >/dev/null 2>&1 &", true);
+                        Logger.i("RK3588开始CPU测试");
+                    } else {
+                        Logger.i("Orion865开始CPU测试");
+                        ShellUtils.execCommand("input keyevent BACK", true);
+                        ShellUtils.execCommand("am force-stop com.into.stability", true);
+                        ShellUtils.execCommand("am start com.into.stability/com.common.activity.MainActivity", true);
+                        Thread.sleep(1000);
+                        //865不存在下方按钮栏
+                        ShellUtils.execCommand("input tap 477 459", true);
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }).start();
+            }).start();
+        } else {
+            mExecutors.execute(new Runnable() {
+                @Override
+                public void run() {
+                    ShellUtils.execCommand("./data/local/tmp/start_cpu_gpu.sh", true);
+                    for (int i = 0; i < 2; i++) {
+                        final int temp = i;
+                        mExecutors.execute(new Runnable() {
+                            @Override
+                            public final void run() {
+                                ShellUtils.CommandResult commandResult = ShellUtils.execCommand("/data/local/tmp/cpu_full 24", true);
+                                Log.d(TAG, temp + "startGPUTest: cpu_full " + commandResult);
+                            }
+                        });
+                    }
+                }
+            });
+        }
+
 
         rebootCount = Config.rebootCount;
         Logger.i("开始老化测试,收到信息:" + strings);
@@ -214,7 +236,7 @@ public class MyReceiver extends BroadcastReceiver {
         totalCPU = 0;
         loopTime = 1;
         int remainingTime = Integer.parseInt(strings) * 60 * 1000;
-        Logger.i("时间应该是："+(long) Integer.parseInt(strings) * 60 +"秒");
+        Logger.i("时间应该是：" + (long) Integer.parseInt(strings) * 60 + "秒");
         CountDownTimer timer = new CountDownTimer((long) Integer.parseInt(strings) * 60 * 1000, 2000) {
             public void onTick(long millisUntilFinished) {
                 loopTime++;
@@ -238,50 +260,49 @@ public class MyReceiver extends BroadcastReceiver {
 
     public void startGPUTest(String strings) {
         Config.rebootCount = 0;
-        new Thread(() -> {
-            ShellUtils.execCommand("input keyevent BACK", true);
-            ShellUtils.execCommand("am force-stop com.ioncannon.cpuburn.gpugflops", true);
-            ShellUtils.execCommand("am start com.ioncannon.cpuburn.gpugflops/com.ioncannon.cpuburn.gpugflops.CPUBurnActivity", true);
-            try {
-                Thread.sleep(1000);
-                ShellUtils.CommandResult result = ShellUtils.execCommand("getprop | grep ro.soc.model",true);
-                Logger.i("结果："+result.getSuccessMsg());
-                if (ShellUtils.execCommand("getprop | grep ro.soc.model",true).getSuccessMsg().contains("RK3588")){
-                    Logger.i("RK3588开始GPU测试");
-                    ShellUtils.execCommand("settings put global settings_enable_monitor_phantom_procs false",true);
-                    ShellUtils.execCommand("settings put global cached_apps_freezer disabled",true);
-                    isRK = true;
-                    ShellUtils.execCommand("input tap 31 1032", true);//拷GPU
-                    ShellUtils.execCommand("input tap 179 1037", true);//拷GPU Scalar
-                    ShellUtils.execCommand("input tap 113 940", true);//CPU模式
-                    Thread.sleep(800);
-                    ShellUtils.execCommand("input tap 434 605", true);//FP32浮点
-                    Thread.sleep(800);
-                    ShellUtils.execCommand("input tap 829 1480", true);//确定按钮
-                    ShellUtils.execCommand("input tap 324 940", true);//线程数
-                    Thread.sleep(800);
-                    ShellUtils.execCommand("input tap 278 1172", true);//选8个
-                    Thread.sleep(800);
-                    ShellUtils.execCommand("input tap 829 1480", true);//确定按钮
-                    ShellUtils.execCommand("input tap 268 1108", true);//开始
-                }else {
-                    Logger.i("Orion865开始GPU测试");
-                    isRK = false;
-                    ShellUtils.execCommand("input tap 52 1472", true);
-                    ShellUtils.execCommand("input tap 284 1477", true);
-                    ShellUtils.execCommand("input tap 97 1344", true);
-                    ShellUtils.execCommand("input tap 395 582", true);
-                    ShellUtils.execCommand("input tap 876 1677", true);
-                    ShellUtils.execCommand("input tap 331 1340", true);
-                    ShellUtils.execCommand("input tap 355 1414", true);
-                    ShellUtils.execCommand("input tap 876 1677", true);
-                    ShellUtils.execCommand("input tap 308 1569", true);
-                }
-                //纯GPU测试
+        if (this.socModel == SOCModel.Orion865 || this.socModel == SOCModel.RK3588) {
+            new Thread(() -> {
+                ShellUtils.execCommand("input keyevent BACK", true);
+                ShellUtils.execCommand("am force-stop com.ioncannon.cpuburn.gpugflops", true);
+                ShellUtils.execCommand("am start com.ioncannon.cpuburn.gpugflops/com.ioncannon.cpuburn.gpugflops.CPUBurnActivity", true);
+                try {
+                    Thread.sleep(1000);
+                    ShellUtils.CommandResult result = ShellUtils.execCommand("getprop | grep ro.soc.model", true);
+                    Logger.i("结果：" + result.getSuccessMsg());
+                    if (ShellUtils.execCommand("getprop | grep ro.soc.model", true).getSuccessMsg().contains("RK3588")) {
+                        Logger.i("RK3588开始GPU测试");
+                        ShellUtils.execCommand("settings put global settings_enable_monitor_phantom_procs false", true);
+                        ShellUtils.execCommand("settings put global cached_apps_freezer disabled", true);
+                        ShellUtils.execCommand("input tap 31 1032", true);//拷GPU
+                        ShellUtils.execCommand("input tap 179 1037", true);//拷GPU Scalar
+                        ShellUtils.execCommand("input tap 113 940", true);//CPU模式
+                        Thread.sleep(800);
+                        ShellUtils.execCommand("input tap 434 605", true);//FP32浮点
+                        Thread.sleep(800);
+                        ShellUtils.execCommand("input tap 829 1480", true);//确定按钮
+                        ShellUtils.execCommand("input tap 324 940", true);//线程数
+                        Thread.sleep(800);
+                        ShellUtils.execCommand("input tap 278 1172", true);//选8个
+                        Thread.sleep(800);
+                        ShellUtils.execCommand("input tap 829 1480", true);//确定按钮
+                        ShellUtils.execCommand("input tap 268 1108", true);//开始
+                    } else {
+                        Logger.i("Orion865开始GPU测试");
+                        ShellUtils.execCommand("input tap 52 1472", true);
+                        ShellUtils.execCommand("input tap 284 1477", true);
+                        ShellUtils.execCommand("input tap 97 1344", true);
+                        ShellUtils.execCommand("input tap 395 582", true);
+                        ShellUtils.execCommand("input tap 876 1677", true);
+                        ShellUtils.execCommand("input tap 331 1340", true);
+                        ShellUtils.execCommand("input tap 355 1414", true);
+                        ShellUtils.execCommand("input tap 876 1677", true);
+                        ShellUtils.execCommand("input tap 308 1569", true);
+                    }
+                    //纯GPU测试
 //                ShellUtils.execCommand("input tap 39 1477", true);
 //                ShellUtils.execCommand("input tap 260 1477", true);
 //                ShellUtils.execCommand("input tap 308 1569", true);
-                //纯CPU
+                    //纯CPU
 //                ShellUtils.execCommand("input tap 105 1340", true);
 //                ShellUtils.execCommand("input tap 403 571", true);
 //                ShellUtils.execCommand("input tap 866 1677", true);
@@ -289,10 +310,40 @@ public class MyReceiver extends BroadcastReceiver {
 //                ShellUtils.execCommand("input tap 347 1393", true);
 //                ShellUtils.execCommand("input tap 866 1677", true);
 //                ShellUtils.execCommand("input tap 308 1569", true);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }).start();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }).start();
+        } else {
+            this.mExecutors.execute(new Runnable() {
+                @Override
+                public final void run() {
+                    ShellUtils.execCommand("./data/local/tmp/start_cpu_gpu.sh", true);
+                    for (int i = 0; i < 2; i++) {
+                        final int temp = i;
+                        mExecutors.execute(new Runnable() {
+                            @Override
+                            public final void run() {
+                                ShellUtils.CommandResult commandResult = ShellUtils.execCommand("/data/local/tmp/cpu_full 24", true);
+                                Log.d(TAG, temp + "startGPUTest: cpu_full " + commandResult);
+                            }
+                        });
+                    }
+                    for (int i2 = 0; i2 < 3; i2++) {
+                        final int temp = i2;
+                        mExecutors.execute(new Runnable() {
+                            @Override
+                            public final void run() {
+                                ShellUtils.CommandResult commandResult = ShellUtils.execCommand("/data/local/tmp/flatland64", true);
+                                Log.d(TAG, temp + "startGPUTest: flatland64 " + commandResult);
+                            }
+                        });
+                    }
+                }
+            });
+
+        }
+
 
         rebootCount = Config.rebootCount;
         Logger.i("开始老化测试,收到信息:" + strings);
@@ -403,16 +454,20 @@ public class MyReceiver extends BroadcastReceiver {
      * 获取CPU温度
      */
     public double getCPUTemperature() {
-        if (isRK){
+        if (this.socModel == SOCModel.RK3588) {
             String temp1 = FileUtils.readExternal("/sys/class/thermal/thermal_zone1/temp");
             String temp2 = FileUtils.readExternal("/sys/class/thermal/thermal_zone2/temp");
             String temp3 = FileUtils.readExternal("/sys/class/thermal/thermal_zone3/temp");
-            double temp = Double.parseDouble(temp1)+Double.parseDouble(temp2)+Double.parseDouble(temp3);
-            return temp / 3000;
-        }else {
-            String temp = FileUtils.readExternal("/sys/class/thermal/thermal_zone9/temp");
-            return Double.parseDouble(temp.trim()) / 1000;
+            double temp = Double.parseDouble(temp1) + Double.parseDouble(temp2) + Double.parseDouble(temp3);
+            return temp / 3000.0d;
+        } else if (this.socModel == SOCModel.SM8550) {
+            String temp4 = FileUtils.readExternal("/sys/class/thermal/thermal_zone32/temp");
+            return Double.parseDouble(temp4.trim()) / 1000.0d;
+        } else {
+            String temp5 = FileUtils.readExternal("/sys/class/thermal/thermal_zone9/temp");
+            return Double.parseDouble(temp5.trim()) / 1000.0d;
         }
+
     }
 
     private void setCPUData(String fileName, int remainingTime) {
@@ -452,15 +507,17 @@ public class MyReceiver extends BroadcastReceiver {
         } catch (JSONException e) {
             e.printStackTrace();
         }
-        Logger.i("CPU数据:" + jsonObject.toString());
+        Logger.i("CPU数据:" + ",cpuUseage=" + cpuUseage + ",cpuTmp=" + cpuTmp + "," + jsonObject);
         FileUtils.writeTxt(jsonObject.toString(), fileName);
     }
 
     private void setGPUData(String fileName, int remainingTime) {
         String result;
-        if (isRK){
+        if (this.socModel == SOCModel.RK3588) {
             result = ShellUtils.execCommand("cat /sys/devices/platform/fb000000.gpu/devfreq/fb000000.gpu/load", true).getSuccessMsg().split("@")[0];
-        }else {
+        } else if (this.socModel == SOCModel.SM8550) {
+            result = ShellUtils.execCommand("cat /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage", true).getSuccessMsg().replace("%", "").trim();
+        } else {
             result = ShellUtils.execCommand("cat /sys/class/devfreq/*qcom,kgsl-3d0/gpu_load", true).getSuccessMsg();
         }
 
@@ -476,11 +533,14 @@ public class MyReceiver extends BroadcastReceiver {
         }
 
         double gpuTmp = 0;
-        if (isRK){
-            gpuTmp = Double.parseDouble(ShellUtils.execCommand("cat /sys/class/thermal/thermal_zone5/temp", true).getSuccessMsg())/1000;
-        }else {
-            gpuTmp = Double.parseDouble(ShellUtils.execCommand("cat /sys/class/kgsl/kgsl-3d0/temp", true).getSuccessMsg())/ 1000;
+        if (this.socModel == SOCModel.RK3588) {
+            gpuTmp = Double.parseDouble(ShellUtils.execCommand("cat /sys/class/thermal/thermal_zone5/temp", true).getSuccessMsg()) / 1000.0d;
+        } else if (this.socModel == SOCModel.SM8550) {
+            gpuTmp = Double.parseDouble(ShellUtils.execCommand("cat /sys/class/thermal/thermal_zone63/temp", true).getSuccessMsg()) / 1000.0d;
+        } else {
+            gpuTmp = Double.parseDouble(ShellUtils.execCommand("cat /sys/class/kgsl/kgsl-3d0/temp", true).getSuccessMsg()) / 1000.0d;
         }
+
 
         if (gpuTmp > gpuMaxTmp) {
             gpuMaxTmp = gpuTmp;
@@ -505,7 +565,19 @@ public class MyReceiver extends BroadcastReceiver {
         } catch (JSONException e) {
             e.printStackTrace();
         }
-        Logger.i("GPU数据:" + jsonObject);
+        Logger.i("GPU数据:" + ",gpuUseage=" + gpuUseage + ",gpuTmp=" + gpuTmp + "," + jsonObject);
         FileUtils.writeTxt(jsonObject.toString(), fileName);
     }
+
+
+    private void getCurSOCModel() {
+        if (ShellUtils.execCommand("getprop | grep ro.soc.model", true).getSuccessMsg().contains("RK3588")) {
+            this.socModel = SOCModel.RK3588;
+        } else if (ShellUtils.execCommand("getprop | grep ro.soc.model", true).getSuccessMsg().contains("QCS8550")) {
+            this.socModel = SOCModel.SM8550;
+        } else {
+            this.socModel = SOCModel.Orion865;
+        }
+    }
+
 }

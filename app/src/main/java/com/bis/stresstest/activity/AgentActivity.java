@@ -48,48 +48,54 @@ public class AgentActivity extends AppCompatActivity implements View.OnClickList
         params.height = 1;
         params.width = 1;
         window.setAttributes(params);
-        startService(new Intent(AgentActivity.this, BackGroundService.class));
-        moveTaskToBack(true);
+        startForegroundService(new Intent(AgentActivity.this, BackGroundService.class));
+//        moveTaskToBack(true);
         new Thread(() -> {
-            ShellUtils.execCommand("wm overscan 0,-70,0,-140",true);
+            ShellUtils.execCommand("wm overscan 0,-70,0,-140", true);
             ShellUtils.execCommand("input keyevent BACK", true);
             ShellUtils.execCommand("input keyevent HOME", true);
             ShellUtils.execCommand("am force-stop com.into.stability", true);
-
             FileUtils.getInstance(this).copyAssetsToSD("stabilityTest.apk", "/data/data/com.bis.stresstest/stabilityTest.apk");
             FileUtils.getInstance(this).copyAssetsToSD("QMESA_64", "/data/data/com.bis.stresstest/QMESA_64");
             FileUtils.getInstance(this).copyAssetsToSD("GPUGfloat.apk", "/data/data/com.bis.stresstest/GPUGfloat.apk");
             FileUtils.getInstance(this).copyAssetsToSD("stressapptest", "/data/data/com.bis.stresstest/stressapptest");
-
+            FileUtils.getInstance(this).copyAssetsToSD("cpu_full", "/data/data/com.bis.stresstest/cpu_full");
+            FileUtils.getInstance(this).copyAssetsToSD("flatland64", "/data/data/com.bis.stresstest/flatland64");
+            FileUtils.getInstance(this).copyAssetsToSD("start_cpu_gpu.sh", "/data/data/com.bis.stresstest/start_cpu_gpu.sh");
             ShellUtils.execCommand("mv /data/data/com.bis.stresstest/stabilityTest.apk /data/local/tmp/", true);
             ShellUtils.execCommand("mv /data/data/com.bis.stresstest/QMESA_64 /data/local/tmp/", true);
             ShellUtils.execCommand("mv /data/data/com.bis.stresstest/GPUGfloat.apk /data/local/tmp/", true);
             ShellUtils.execCommand("mv /data/data/com.bis.stresstest/stressapptest /data/local/tmp/", true);
-
+            ShellUtils.execCommand("mv /data/data/com.bis.stresstest/cpu_full /data/local/tmp/", true);
+            ShellUtils.execCommand("mv /data/data/com.bis.stresstest/flatland64 /data/local/tmp/", true);
+            ShellUtils.execCommand("mv /data/data/com.bis.stresstest/start_cpu_gpu.sh /data/local/tmp/", true);
             ShellUtils.execCommand("chmod 777 /data/local/tmp/stressapptest", true);
             ShellUtils.execCommand("chmod 777 /data/local/tmp/test.sh", true);
+            ShellUtils.execCommand("chmod 777 /data/local/tmp/cpu_full", true);
+            ShellUtils.execCommand("chmod 777 /data/local/tmp/flatland64", true);
+            ShellUtils.execCommand("chmod 777 /data/local/tmp/start_cpu_gpu.sh", true);
             ShellUtils.execCommand("pm install -r /data/local/tmp/stabilityTest.apk", true);
             ShellUtils.execCommand("pm install -r /data/local/tmp/GPUGfloat.apk", true);
             ShellUtils.execCommand("am start com.into.stability/com.common.activity.MainActivity", true);
+
 
             //865存在下方按钮栏
 //            ShellUtils.execCommand("input tap 965 1746", true);
 //            ShellUtils.execCommand("input tap 892 1062", true);
 //            ShellUtils.execCommand("input tap 871 1478", true);
-            ShellUtils.CommandResult result = ShellUtils.execCommand("getprop | grep ro.soc.model",true);
-            Logger.i("结果："+result.getSuccessMsg());
+            ShellUtils.CommandResult result = ShellUtils.execCommand("getprop | grep ro.soc.model", true);
+            Logger.i("结果：" + result.getSuccessMsg());
             //865不存在下方按钮栏
-            if (ShellUtils.execCommand("getprop | grep ro.soc.model",true).getSuccessMsg().contains("RK3588")){
+            if (ShellUtils.execCommand("getprop | grep ro.soc.model", true).getSuccessMsg().contains("RK3588")) {
                 Logger.i("该型号是RK3588");
-                ShellUtils.execCommand("settings put global settings_enable_monitor_phantom_procs false",true);
-                ShellUtils.execCommand("settings put global cached_apps_freezer disabled",true);
-            }else {
+                ShellUtils.execCommand("settings put global settings_enable_monitor_phantom_procs false", true);
+                ShellUtils.execCommand("settings put global cached_apps_freezer disabled", true);
+            } else {
                 Logger.i("该型号是Orion865");
                 ShellUtils.execCommand("input tap 938 1845", true);
                 ShellUtils.execCommand("input tap 950 1153", true);
                 ShellUtils.execCommand("input tap 828 1680", true);
             }
-
 
 
             ShellUtils.execCommand("am force-stop com.into.stability", true);
@@ -106,7 +112,8 @@ public class AgentActivity extends AppCompatActivity implements View.OnClickList
                 runOnUiThread(() -> {
                     JSONObject jsonObject;
                     try {
-                        if (ShellUtils.execCommand("cat /data/data/com.bis.stresstest/status.txt", true).getSuccessMsg().contains("memTest")) {
+                        if (ShellUtils.execCommand("cat /data/data/com.bis.stresstest/status.txt", true).getSuccessMsg().contains("memTest")
+                                || ShellUtils.execCommand("getprop | grep ro.soc.model", true).getSuccessMsg().contains("QCS8550")) {
                             jsonObject = new JSONObject(ShellUtils.execCommand("cat /data/data/com.bis.stresstest/MEMTest.txt", true).getSuccessMsg());
                             new MyReceiver().startMEMTest(jsonObject.getString("remainingTime"));
                         } else {
