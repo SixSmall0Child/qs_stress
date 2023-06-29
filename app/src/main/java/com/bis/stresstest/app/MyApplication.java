@@ -5,10 +5,12 @@ import android.app.ActivityManager;
 import android.app.Application;
 import android.content.Context;
 import android.telephony.TelephonyManager;
+import android.util.ArrayMap;
 
 import com.bis.stresstest.activity.AgentActivity;
 import com.bis.stresstest.util.Config;
 import com.bis.stresstest.util.FileUtils;
+import com.bis.stresstest.util.ShellUtils;
 
 import java.lang.reflect.Method;
 
@@ -35,6 +37,10 @@ public class MyApplication extends Application {
         super.onCreate();
         TelephonyManager telephonyManager = (TelephonyManager) this.getSystemService(Context.TELEPHONY_SERVICE);
         mContext = getApplicationContext();
+
+        //android13后通知需要权限
+        ShellUtils.execCommand("pm grant " + getPackageName() + " android.permission.POST_NOTIFICATIONS", true);
+        ShellUtils.execCommand("pm grant " + getPackageName() + " android.permission.ACCESS_FINE_LOCATION", true);
     }
 
 
@@ -45,20 +51,18 @@ public class MyApplication extends Application {
 
     /**
      * 拿IP ， 需要的时候才拿，只拿一次
-     *
      */
     public static String getDevicesIpAddress() {
         Config.devicesIp = FileUtils.getIPAddress();
-        if (Config.devicesIp == null){
+        if (Config.devicesIp == null) {
             return "";
-        }else {
+        } else {
             return Config.devicesIp;
         }
     }
 
     /**
      * 拿序列
-     *
      */
     @SuppressLint({"MissingPermission", "NewApi"})
     public static String getDevicesIpAddressAndSerial() {

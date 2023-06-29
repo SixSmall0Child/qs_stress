@@ -5,12 +5,14 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 
+import com.bis.stresstest.R;
 import com.bis.stresstest.app.MyApplication;
 import com.bis.stresstest.receiver.MyReceiver;
 import com.bis.stresstest.service.BackGroundService;
@@ -40,14 +42,15 @@ public class AgentActivity extends AppCompatActivity implements View.OnClickList
     public void onCreate(Bundle savedInstanceState) {
         Logger.i("APP启动");
         super.onCreate(savedInstanceState);
-        Window window = getWindow();
+        /*Window window = getWindow();
         window.setGravity(Gravity.LEFT | Gravity.TOP);
         WindowManager.LayoutParams params = window.getAttributes();
         params.x = 0;
         params.y = 0;
         params.height = 1;
         params.width = 1;
-        window.setAttributes(params);
+        window.setAttributes(params);*/
+        setContentView(R.layout.activity_main);
         startForegroundService(new Intent(AgentActivity.this, BackGroundService.class));
 //        moveTaskToBack(true);
         new Thread(() -> {

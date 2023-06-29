@@ -90,11 +90,11 @@ public class BackGroundService extends Service {
 
         //3.最关键的神来之笔，也是最投机的动作，没办法要骗过CPU
         //这就是播放音乐类APP不被杀的做法，自己找个无声MP3放进来循环播放
-        if (bgmediaPlayer == null) {
+        /*if (bgmediaPlayer == null) {
             bgmediaPlayer = MediaPlayer.create(this, R.raw.silent);
             bgmediaPlayer.setLooping(true);
             bgmediaPlayer.start();
-        }
+        }*/
         startForeground(1, this.notification);
         return START_STICKY;
     }

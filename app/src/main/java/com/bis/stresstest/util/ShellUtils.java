@@ -253,7 +253,7 @@ public class ShellUtils {
     public static CommandResult execPrint(String[] commands, boolean isRoot,boolean is2GB,
                                           boolean isNeedResultMsg) {
 
-        writeNetworkFile(0,0,9999,9999,1,0);
+        writeNetworkFile(0,0,0,0,9999,9999,1,0);
         Process process = null;
         BufferedReader successResult = null;
         BufferedReader errorResult = null;
@@ -287,6 +287,8 @@ public class ShellUtils {
                 String s;
                 int low800Mbps = 0;
                 int low500Mbps = 0;
+                int low1500Mbps = 0;
+                int low2000Mbps = 0;
                 int disconnectTime = 0;
                 int disconnectCount = 0;
                 int loopCount = 0;
@@ -325,10 +327,14 @@ public class ShellUtils {
                                     low500Mbps++;
                                 } else if (nowSpeed < 800) {
                                     low800Mbps++;
+                                } else if (nowSpeed < 1500) {
+                                    low1500Mbps++;
+                                }else if (nowSpeed < 2000) {
+                                    low2000Mbps++;
                                 }
                                 networkSpeed = networkSpeed+nowSpeed;
                             }
-                            writeNetworkFile(low800Mbps,low500Mbps,disconnectTime,disconnectCount,loopCount,networkSpeed);
+                            writeNetworkFile(low2000Mbps,low1500Mbps,low800Mbps,low500Mbps,disconnectTime,disconnectCount,loopCount,networkSpeed);
 //                        }
                     }
                 }
@@ -367,11 +373,13 @@ public class ShellUtils {
     }
 
 
-    public static void writeNetworkFile(int low800Mbps, int low500Mbps, int disconnectTime, int disconnectCount, int loopCount, double networkSpeed)  {
+    public static void writeNetworkFile(int low2000Mbps, int low1500Mbps,int low800Mbps, int low500Mbps, int disconnectTime, int disconnectCount, int loopCount, double networkSpeed)  {
         JSONObject jo = new JSONObject();
-//        Logger.i("平均速度："+networkSpeed/loopCount+",次数："+loopCount+",总速度"+networkSpeed);
+        Logger.i("平均速度："+networkSpeed/loopCount+",次数："+loopCount+",总速度"+networkSpeed);
         try {
             jo.put("averageSpeed",networkSpeed/loopCount);
+            jo.put("low2000",low2000Mbps);
+            jo.put("low1500",low1500Mbps);
             jo.put("low800",low800Mbps);
             jo.put("low500",low500Mbps);
             jo.put("disconnectTime",disconnectTime);
